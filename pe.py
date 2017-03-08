@@ -1,10 +1,8 @@
-from __future__ import absolute_import
-
 from ctypes import *
 from io import BytesIO
 from struct import pack, unpack
 
-from .defines import *
+from defines import *
 
 
 MAX_DLL_NAME_LENGTH = 0x200
