@@ -121,11 +121,12 @@ class PE(object):
         dos_header = self.dos_header
         nt_header = self.nt_header
 
-        # write original dos header
-        mapped.seek(0)
-        fp.seek(0)
-        mapped.write(fp.read(dos_header.e_lfanew))
+        # write dos Real-Mode Stub Program
+        mapped.seek(sizeof(dos_header))
+        fp.seek(sizeof(dos_header))
+        mapped.write(fp.read(dos_header.e_lfanew-sizeof(dos_header)))
 
+        # write dos header and nt header
         mapped.seek(0)
         mapped.write(struct2str(dos_header))
         mapped.seek(dos_header.e_lfanew)
@@ -163,12 +164,17 @@ class PE(object):
         getaddr = self.getaddr
         getint = self.getint
 
+        exports = dict()
+
+        # skip if datadirectory does not exists
+        if data_directory.Size == 0:
+            self.exports = exports
+            return
+
         fp.seek(data_directory.VirtualAddress)
         export_dir = IMAGE_EXPORT_DIRECTORY()
         assert sizeof(export_dir) == fp.readinto(export_dir), "Invalid IMAGE_EXPORT_DIRECTORY length"
         # assert export_dir.NumberOfFunctions == export_dir.NumberOfNames, "NumberOfFunctions != NumberOfNames"
-
-        exports = dict()
 
         funcs = [getaddr(export_dir.AddressOfFunctions + (bits/8)*i, isrva=True) \
                 for i in range(export_dir.NumberOfFunctions)]
@@ -193,6 +199,11 @@ class PE(object):
         load_cdata = self._load_cdata
 
         imports = dict()
+
+        # skip if datadirectory does not exists
+        if data_directory.Size == 0:
+            self.imports = imports
+            return
 
         # parse ENTRY_IMPORT
         fp.seek(data_directory.VirtualAddress)
