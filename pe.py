@@ -121,8 +121,14 @@ class PE(object):
         dos_header = self.dos_header
         nt_header = self.nt_header
 
+        # write original dos header
+        mapped.seek(0)
+        fp.seek(0)
+        mapped.write(fp.read(dos_header.e_lfanew))
+
         mapped.seek(0)
         mapped.write(struct2str(dos_header))
+        mapped.seek(dos_header.e_lfanew)
         mapped.write(struct2str(nt_header))
         for sh in section_headers:
             mapped.write(struct2str(sh))
