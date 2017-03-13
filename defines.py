@@ -205,7 +205,7 @@ class IMAGE_NT_HEADERS64(Structure):
     _fields_ = [
         ("Signature",       DWORD),
         ("FileHeader",      IMAGE_FILE_HEADER),
-        ("OptionalHeader",  IMAGE_OPTIONAL_HEADER32),
+        ("OptionalHeader",  IMAGE_OPTIONAL_HEADER64),
     ]
 PIMAGE_NT_HEADERS64 = POINTER(IMAGE_NT_HEADERS64)
 
@@ -285,7 +285,7 @@ class IMAGE_THUNK_DATA64(Structure):
             ("Ordinal",         ULONGLONG),
             ("AddressOfData",   ULONGLONG),
         ]
-    _fileds_ = [
+    _fields_ = [
         ("u1",  _U),
     ]
 PIMAGE_THUNK_DATA64 = POINTER(IMAGE_THUNK_DATA64)

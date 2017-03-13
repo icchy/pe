@@ -45,8 +45,6 @@ class PE(object):
             IMAGE_NT_OPTIONAL_HDR64_MAGIC: 64,
         }[nt_header.OptionalHeader.Magic]
 
-        assert bits == 32, "currently 64bit binary is not supported"
-
         self.dos_header = dos_header
         self.bits = bits
         self.isdll = True if nt_header.FileHeader.Characteristics & IMAGE_FILE_DLL else False
@@ -176,9 +174,9 @@ class PE(object):
         assert sizeof(export_dir) == fp.readinto(export_dir), "Invalid IMAGE_EXPORT_DIRECTORY length"
         # assert export_dir.NumberOfFunctions == export_dir.NumberOfNames, "NumberOfFunctions != NumberOfNames"
 
-        funcs = [getaddr(export_dir.AddressOfFunctions + (bits/8)*i, isrva=True) \
+        funcs = [getint(export_dir.AddressOfFunctions + 4*i, 4, isrva=True) \
                 for i in range(export_dir.NumberOfFunctions)]
-        names = [getstr(getaddr(export_dir.AddressOfNames + (bits/8)*i, isrva=True), isrva=True) \
+        names = [getstr(getint(export_dir.AddressOfNames + 4*i, 4, isrva=True), isrva=True) \
                 for i in range(export_dir.NumberOfNames)]
         ordinals = [getint(export_dir.AddressOfNameOrdinals + 2*i, 2, isrva=True) \
                 for i in range(export_dir.NumberOfNames)]
@@ -239,7 +237,28 @@ class PE(object):
                 64: IMAGE_THUNK_DATA64,
             }[bits]()
 
+            original_first_thunks = []
+
+            # parse OriginalFirstThunks
+            fp.seek(import_dir.OriginalFirstThunk)
+            while True:
+                fp.readinto(thunk_data)
+
+                # end of OriginalFirstThunks
+                if thunk_data.u1.AddressOfData == 0:
+                    break
+
+                # check if the value is ordinal
+                if thunk_data.u1.Ordinal & [1<<31, 1<<63][bits/64]:
+                    ordinal = thunk_data.u1.Ordinal & 0xffff
+                    continue
+
+                load_cdata(thunk_data.u1.AddressOfData, import_by_name, isrva=True)
+                original_first_thunks.append([import_by_name.Hint, import_by_name.Name])
+
+
             fp.seek(import_dir.FirstThunk)
+            idx = 0
             while True:
                 vaddr = self.imagebase + fp.tell()
                 fp.readinto(thunk_data)
@@ -247,15 +266,11 @@ class PE(object):
                 # end of thunk_data
                 if thunk_data.u1.AddressOfData == 0:
                     break
-                # the data is ordinal
-                if thunk_data.u1.Ordinal & 0x80000000:
-                    break
 
-                load_cdata(thunk_data.u1.AddressOfData, import_by_name, isrva=True)
-                imports[dllname][import_by_name.Name] = vaddr
+                imports[dllname][original_first_thunks[idx][1]] = vaddr
+                idx += 1
 
         self.imports = imports
-
 
 
     def _load_cdata(self, offset, c_data, isrva=False, check=True):
@@ -266,7 +281,7 @@ class PE(object):
 
         save = fp.tell()
         fp.seek(offset)
-        assert sizeof(c_data) == fp.readinto(c_data) and check, "Invalid length loaded"
+        assert sizeof(c_data) == fp.readinto(c_data) or (not check), "Invalid length loaded"
         fp.seek(save)
 
 
@@ -290,6 +305,8 @@ class PE(object):
             offset = addr - sh.PointerToRawData
             if 0 <= offset < sh.SizeOfRawData:
                 return sh.VirtualAddress + offset
+
+        raise Exception, "No suitable section found"
 
 
     def getstr(self, offset, size=0, isrva=False):
