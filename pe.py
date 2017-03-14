@@ -251,6 +251,7 @@ class PE(object):
                 # check if the value is ordinal
                 if thunk_data.u1.Ordinal & [1<<31, 1<<63][bits/64]:
                     ordinal = thunk_data.u1.Ordinal & 0xffff
+                    original_first_thunks.append([ordinal])
                     continue
 
                 load_cdata(thunk_data.u1.AddressOfData, import_by_name, isrva=True)
@@ -267,7 +268,10 @@ class PE(object):
                 if thunk_data.u1.AddressOfData == 0:
                     break
 
-                imports[dllname][original_first_thunks[idx][1]] = vaddr
+                if len(original_first_thunks[idx]) > 1:
+                    imports[dllname][original_first_thunks[idx][1]] = vaddr
+                else: # ordinal
+                    continue
                 idx += 1
 
         self.imports = imports
